@@ -1,126 +1,104 @@
 package ru.larin.HashMap;
-import javax.swing.plaf.nimbus.NimbusLookAndFeel;
-import java.awt.image.AreaAveragingScaleFilter;
+
 import java.util.ArrayList;
-import java.util.concurrent.ExecutionException;
+import java.util.Arrays;
 
 /**
- * Created by denis__larin on 16.03.17.
+ * Created by denis__larin on 13.04.17.
  */
 public class HashMap<K,V> implements IHashMap<K,V> {
     private int capacity = 100;
-    private int size;
-    private double load_factor;
-    private ArrayList<Pair<K, V>>[] map;
+    private int size = 0;
+    private ArrayList<Pair<K,V>>[] map;
+
     public HashMap() {
         map = new ArrayList[capacity];
-        load_factor = 0;
-        size = 0;
     }
-    private int enterHashCode(K key){
-        return key.hashCode()/capacity;
-    }
-    @Override
-    public void put(K key, V value) {
-        boolean up = false;
-        int hash = enterHashCode(key);
-        //пока hashcode больше вместимости массива
-        while(hash>=capacity){
-            //System.out.println("step: key = " + key + " value = " + value + " hashS = " + hash);
-            /*увеличиваем вместимость в 5раз*/
-            capacity*=5;
-            //System.out.println("capacity: " + capacity);
-            /*пересчитываем hashcode*/
-            hash = enterHashCode(key);
-            //System.out.println("hash: " + hash);
-            /*true -- было произведено изменение capacity*/
-            up = true;
-        }
 
-        /*если в массиве было больше чем 1 элемент и было расширение capacity*/
-        if (size >= 1 && up){
-            up = !up;
-            /*временный массив arraylist'ов*/
-            ArrayList<Pair<K,V>>[] temp = new ArrayList[map.length];
-            /*идем от 0 до размера map и переносим все значения из map в temp*/
-            for (int i = 0; i < map.length; i++) {
-                try{
-                    if(!map[i].isEmpty()){
-                        temp[i] = new ArrayList<Pair<K,V>>();
-                        for (int j = 0; j < map[i].size(); j++) {
-                            temp[i].add(map[i].get(j));
-                        }
-                    }
-                }
-                catch (NullPointerException e){
-                    continue;
-                }
-            }
-            /*увеличиваем размер map*/
-            map = new ArrayList[capacity];
-            /*рекурсивно вызываем функцию добавления (для заполнения map)*/
-            for (int i = 0; i < temp.length; i++) {
-                try {
-                    if (!temp[i].isEmpty()) {
-                        for (int j = 0; j < temp[i].size(); j++) {
-                            put(temp[i].get(j).getKey(), temp[i].get(j).getValue());
-                        }
-                    }
-                }catch (NullPointerException e){
-                    continue;
-                }
-            }
+    @Override
+    public boolean put(K key, V value) {
+        boolean up = false;
+        int hashCode = enterHashCode(key);
+        //расширяем массив если hashcode больше чем capasity
+        while (hashCode >= capacity) {
+            up = true;
+            capacity *= 2;
+            //пересчитываем hashcode относительно capacity
+            hashCode = enterHashCode(key);
         }
-        /*если в map был пуст и увеличивался capacity*/
-        else if(size <1 && up){
-            up = !up;
-            /*расширяем map*/
+        //если в таблице нет элементов, то расширяем и добавляем новый элемент
+        if (size == 0 && up) {
             map = new ArrayList[capacity];
-            map[hash] = new ArrayList<Pair<K,V>>();
-            /*добавляем новый элемент в map с индексом по хэш*/
-            map[hash].add(new Pair<K, V>(key,value));
+            map[hashCode] = new ArrayList<Pair<K, V>>();
+            map[hashCode].add(new Pair<>(key, value));
             size++;
+            up=!up;
+            return true;
         }
-        else{
-            /*если элемент в map по индексу hash не инициализирован, то мы инициализируем его*/
-            if(map[hash] == null) {
-                map[hash] = new ArrayList<Pair<K, V>>();
+        //если в массиве были элементы и он расширялся
+        else if(size>0 && up){
+            up = !up;
+            //копируем элементы из map в temp
+            ArrayList<Pair<K,V>>[] temp = Arrays.copyOf(map,map.length);
+            //расширяем map
+            map = new ArrayList[capacity];
+            //переносим из temp в map
+            size = 0;
+            copyIntoMap(temp);
+            //добавляем новый элемент в map
+            put(key,value);
+        }
+        else if (!up){
+            //если не инициализирована
+            if (map[hashCode] == null){
+                map[hashCode] = new ArrayList<Pair<K,V>>();
+                map[hashCode].add(new Pair<>(key, value));
+                size++;
+                return true;
             }
             else{
-                /*если добавляем элемент с существующем ключом (одинаковом хэшем), то просто меняем этот элемент и выходим из функции*/
-                for (int i = 0; i < map[hash].size(); i++) {
-                    if(map[hash].get(i).getKey() == key){
-                        map[hash].set(i,new Pair<K, V>(key, value));
-                        return;
+                for (int i = 0; i < map[hashCode].size(); i++) {
+                    if(map[hashCode].get(i).getKey().equals(key)){
+                        map[hashCode].set(i,new Pair<>(key, value));
                     }
                 }
             }
-            /*добавляем элемент в map по индесу hash*/
-            map[hash].add(new Pair<K, V>(key, value));
-            size++;
         }
-
+        return false;
     }
 
-    private boolean checkLoadFactor() {
-        if((double)this.size/capacity > 0.5)
-            return true;
-        return false;
+    private void copyIntoMap(ArrayList<Pair<K, V>>[] temp) {
+        for (int i = 0; i < temp.length; i++) {
+            if(temp[i]!=null){
+                int deep = temp[i].size();
+                for (int j = 0; j < deep; j++) {
+                    put(temp[i].get(j).getKey(),temp[i].get(j).getValue());
+                }
+            }
+        }
+    }
+
+    private int enterHashCode(K key) {
+        return key.hashCode()/capacity;
     }
 
     @Override
     public boolean remove(K key) {
+        if (size == 0){
+            System.out.println("таблица пустая");
+            return false;
+        }
         if(key == null)
             return false;
         int hashcode = enterHashCode(key);
-        int hashposition;
+        int deep;
         try{
-            hashposition = map[hashcode].size();
-        }catch (Exception e){
+            deep = map[hashcode].size();
+        }catch (NullPointerException e){
             return false;
         }
-        for (int i = 0; i < hashposition; i++) {
-            if (map[hashcode].get(i).equals(key)){
+        for (int i = 0; i < deep; i++) {
+            if(map[hashcode].get(i).getKey().equals(key)){
                 map[hashcode].remove(i);
                 size--;
                 return true;
@@ -131,18 +109,20 @@ public class HashMap<K,V> implements IHashMap<K,V> {
 
     @Override
     public V get(K key) {
-        if (key == null)
-            return null;
-        int hashcode = enterHashCode(key);
-        int hashposition;
-        try {
-            hashposition = map[hashcode].size();
-        }catch (Exception e){
+        if(key == null) {
             return null;
         }
-        for (int i = 0; i < hashposition; i++) {
-            if(map[hashcode].get(i).getKey().equals(key))
+        int hashcode = enterHashCode(key);
+        int deep;
+        try{
+            deep = map[hashcode].size();
+        }catch (NullPointerException e){
+            return null;
+        }
+        for (int i = 0; i < deep; i++) {
+            if(map[hashcode].get(i).getKey().equals(key)){
                 return map[hashcode].get(i).getValue();
+            }
         }
         return null;
     }
@@ -150,9 +130,5 @@ public class HashMap<K,V> implements IHashMap<K,V> {
     @Override
     public int size() {
         return this.size;
-    }
-
-    private double getLoad_factor() {
-        return load_factor;
     }
 }
